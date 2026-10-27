@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Analytics</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, Arial, sans-serif;
+            margin: 0;
+            background: #0d1117;
+            color: #c9d1d9;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+
+        .search-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .search-bar input {
+            flex: 1;
+            padding: 10px 14px;
+            border-radius: 6px;
+            border: 1px solid #30363d;
+            background: #161b22;
+            color: #c9d1d9;
+            font-size: 14px;
+        }
+
+        .search-bar button {
+            padding: 10px 20px;
+            border-radius: 6px;
+            border: none;
+            background: #238636;
+            color: white;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .profile-header {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .profile-header img {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+        }
+
+        .profile-header h2 { margin: 0; }
+        .profile-header p { margin: 4px 0 0; color: #8b949e; }
+
+        .stats-row {
+            display: flex;
+            gap: 24px;
+            margin-top: 16px;
+            font-size: 14px;
+        }
+
+        .stats-row strong { color: #58a6ff; }
+
+        .repo-item {
+            padding: 10px 0;
+            border-bottom: 1px solid #21262d;
+        }
+
+        .repo-item:last-child { border-bottom: none; }
+
+        .repo-item a {
+            color: #58a6ff;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .repo-item .meta {
+            font-size: 12px;
+            color: #8b949e;
+            margin-top: 2px;
+        }
+
+        .heatmap {
+            display: grid;
+            grid-template-rows: repeat(7, 12px);
+            grid-auto-flow: column;
+            gap: 3px;
+            overflow-x: auto;
+            padding-bottom: 8px;
+        }
+
+        .heatmap-cell {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            background: #161b22;
+        }
+
+        .error-msg {
+            color: #f85149;
+            padding: 12px;
+        }
+
+        h3 { margin-top: 0; }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1>GitHub Analytics</h1>
+
+        <div class="search-bar">
+            <input type="text" id="usernameInput" placeholder="Enter a GitHub username...">
+            <button id="searchButton">Analyze</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const usernameInput = document.getElementById('usernameInput');
+        const searchButton = document.getElementById('searchButton');
+        const results = document.getElementById('results');
+
+        function heatmapColor(count) {
+            if (count === 0) return '#161b22';
+            if (count < 3) return '#0e4429';
+            if (count < 6) return '#006d32';
+            if (count < 10) return '#26a641';
+            return '#39d353';
+        }
+
+        async function analyze() {
+            const username = usernameInput.value.trim();
+            if (!username) return;
+
+            results.innerHTML = '<div class="card">Loading...</div>';
+
+            try {
+                const response = await fetch(`/api/dashboard/${username}`);
+                const dashboard = await response.json();
+
+               if (dashboard.error) {
+                results.innerHTML = `<div class="card error-msg">${dashboard.error}</div>`;
+             return;
+            }
+
+const profile = dashboard;
+const repos = dashboard;
+const contributions = dashboard;
+                let html = '';
+
+                html += `
+                    <div class="card">
+                        <div class="profile-header">
+                            <img src="${profile.avatar}" alt="${profile.username}">
+                            <div>
+                                <h2>${profile.name || profile.username}</h2>
+                                <p>@${profile.username}</p>
+                                ${profile.bio ? `<p>${profile.bio}</p>` : ''}
+                            </div>
+                        </div>
+                        <div class="stats-row">
+                            <span><strong>${profile.followers}</strong> followers</span>
+                            <span><strong>${profile.publicRepos}</strong> repos</span>
+                            <span><strong>${repos.totalStars}</strong> total stars</span>
+                            <span><strong>${contributions.totalContributions}</strong> contributions (past year)</span>
+                            <span><strong>${contributions.currentStreak}</strong> day streak</span>
+                        </div>
+                    </div>
+                `;
+
+                html += `
+                    <div class="card">
+                        <h3>Contribution Activity</h3>
+                        <div class="heatmap" id="heatmap"></div>
+                    </div>
+                `;
+
+                html += `
+                    <div class="card">
+                        <h3>Top Languages</h3>
+                        <canvas id="languageChart" height="200"></canvas>
+                    </div>
+                `;
+
+                html += `
+                    <div class="card">
+                        <h3>Top Repositories</h3>
+                        ${repos.topRepos.map(repo => `
+                            <div class="repo-item">
+                                <a href="${repo.url}" target="_blank">${repo.name}</a>
+                                <div class="meta">${repo.language || 'N/A'} · ⭐ ${repo.stars}</div>
+                                ${repo.description ? `<div class="meta">${repo.description}</div>` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+
+                results.innerHTML = html;
+
+                const heatmap = document.getElementById('heatmap');
+                contributions.days.forEach(day => {
+                    const cell = document.createElement('div');
+                    cell.classList.add('heatmap-cell');
+                    cell.style.background = heatmapColor(day.contributionCount);
+                    cell.title = `${day.date}: ${day.contributionCount} contributions`;
+                    heatmap.appendChild(cell);
+                });
+
+                const ctx = document.getElementById('languageChart');
+                new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: repos.languages.map(l => l.name),
+                        datasets: [{
+                            data: repos.languages.map(l => l.count),
+                            backgroundColor: ['#58a6ff', '#39d353', '#f85149', '#e3b341', '#a371f7', '#f778ba', '#79c0ff']
+                        }]
+                    },
+                    options: {
+                        plugins: {
+                            legend: { labels: { color: '#c9d1d9' } }
+                        }
+                    }
+                });
+
+            } catch (error) {
+                results.innerHTML = `<div class="card error-msg">Error: ${error.message}</div>`;
+            }
+        }
+
+        searchButton.addEventListener('click', analyze);
+        usernameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') analyze();
+        });
+    </script>
+
+</body>
+</html>
